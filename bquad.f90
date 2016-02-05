@@ -100,7 +100,7 @@ end subroutine bquad_buildpars
 !       n           --- number of variables; equals numpt * dm
 !       x           --- initial guess value, DIM(1:n)
 !       A_in        --- subroutine that computes A(x) = inv(F(x) * G(x))
-!		alg 		--- optional, integer identifier for NLopt optimization algorithm
+!       alg         --- optional, integer identifier for NLopt optimization algorithm
 !   Outputs:
 !       W           --- resulting bilinear quadrature weight matrix
 !       x           --- bilinear quadrature evaluation points, DIM(1:n)
@@ -115,7 +115,7 @@ subroutine bquad_construct(n, A_in, x, W, sigma_out, alg)
     real(dp),   dimension(:),   intent(inout)   :: x
     real(dp),   dimension(:,:), intent(out)     :: W
     real(dp),                   intent(out)     :: sigma_out
-    integer,    optional,       intent(in)		:: alg
+    integer,    optional,       intent(in)      :: alg
 
     real(dp),   parameter                       :: tol_rel = 1.0d-6
     real(dp),   parameter                       :: tol_abs = 1.0d-6
@@ -128,9 +128,9 @@ subroutine bquad_construct(n, A_in, x, W, sigma_out, alg)
     ! Set algorithm
     if ( present(alg) ) then
         NL_alg = alg
-	else
+    else
         NL_alg = 12
-	end if
+    end if
 
     ! Build NLopt library optimization options
     ! 12 - Praxis, 25 - BOBYQA, 28 - Nelder Mead, 29 - SBPLX
