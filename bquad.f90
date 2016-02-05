@@ -29,9 +29,10 @@
 !                                       INTERFACE MODULE
 ! =================================================================================================
 !
-! This module specifies the way in which the subroutines for evaluating the input function and its
-! derivative must be called.
-!
+! This module specifies the interface for the subroutine that computes the matrix function
+!                               A(x) = inv(F(x)) * G(x)
+! where F(x), G(x) are the collocation matrices for the function space to be integrated exactly and
+! the orthogonal function space to be minimized, respectively.
 
 module bquad_interface
 
@@ -86,8 +87,8 @@ subroutine bquad_buildpars(numpt_in, dm_in, numg_in)
     numpt = numpt_in
     dm = dm_in
     numg = numg_in
-	mink = min(numpt,numg)
-	LWORK = max(1, 3*mink + max(numpt,numg), 5*mink)
+    mink = min(numpt,numg)
+    LWORK = max(1, 3*mink + max(numpt,numg), 5*mink)
 
 end subroutine bquad_buildpars
 
