@@ -7,16 +7,18 @@
 ! =================================================================================================
 !
 ! Author: Christopher A. Wong
-! Date: 5 February 2016
+! Date: 6 February 2016
 ! Format: Fortran 2008
 !
 ! This module contains the procedures evaluate the Legendre polynomials and their derivatives up to
 ! a given degree on the d-dimensional unit cube.
 !
-! Dependencies:
+! Dependencies: LAPACK
 !
 ! Externally called procedures:
+!   leg_buildpars   --- Initial subroutine called to form Legendre polynomial parameters
 !   leg_eval        --- Main subroutine for evaluating Legendre polynomials.
+!   leg_quad2       --- Computes Legendre matrix for 2D bilinear quadrature computations.
 !
 ! Internal procedures:
 !   choose          --- Computes binomial coefficients.
@@ -27,8 +29,9 @@ module legendre
     implicit none
     private
     integer,    parameter                       :: dp = kind(1.0d0)
+    integer                                     :: maxdeg, d, numfuncs
 
-    public  :: leg_eval
+    public  :: leg_eval, leg_quad2
 
 contains
 
@@ -60,13 +63,25 @@ pure integer function choose (n, k)
 end function choose
 
 ! =================================================================================================
+
+subroutine leg_buildpars(deg_in,d_in)
+
+    implicit none
+
+    integer,    intent(in)  :: deg_in, d_in
+
+    maxdeg = deg_in
+    d = d_in
+    numfuncs = choose(maxdeg+d,d)
+
+end subroutine leg_buildpars
+
+! =================================================================================================
 !
 ! Legendre polynomial evaluation
 !
 ! Inputs:
-!   d           --- dimension of the Euclidean space, must be either 1, 2, 3
 !   x           --- input point as a dx1 array
-!   maxdeg      --- maximum degree of the Legendre polynomials
 !   need_deriv  --- optional, set to .TRUE. to compute derivatives, default is .FALSE.
 !
 ! Outputs:
@@ -75,27 +90,23 @@ end function choose
 !       polynomials at x, given as a matrix with rows as functions
 !   flag        --- set to .true. if an error occurs
 
-subroutine leg_eval(d, x, maxdeg, need_deriv, func_out,deriv_out,flag)
+subroutine leg_eval(x, need_deriv, func_out,deriv_out,flag)
 
 implicit none
 
-integer,                    intent(in)  :: d
 real(dp),   dimension(:),   intent(in)  :: x
-integer,                    intent(in)  :: maxdeg
 logical,    optional,       intent(in)  :: need_deriv
 real(dp),   dimension(:),   intent(out) :: func_out
 real(dp),   dimension(:,:), intent(out) :: deriv_out
 logical,                    intent(out) :: flag
 
 logical                                 :: deriv_flag   ! Determines if derivatives are computed
-integer                                 :: numfuncs ! number of functions
 integer                                 :: i, ii, j, jj, k, kk ! loop variables
 
 integer,    dimension(1:choose(maxdeg+d,d),1:d) :: degidx ! stores degrees of multivar. polys
 real(dp),   dimension(0:maxdeg,1:d)             :: leg1D, legder1D ! stores 1d Leg poly evaluations
 
 ! Initialize
-numfuncs    = choose(maxdeg+d,d)
 func_out    = 1.0d0
 deriv_out   = 1.0d0
 flag        = .false.
@@ -106,26 +117,13 @@ else
     deriv_flag = .false.
 end if
 
-! Check input variables
-
-! here we check whether inputs have the correct values
-if (d < 1) then
-    flag = .true.
-else if (d > 3) then
-    flag = .true.
-else if (maxdeg < 1) then
-    flag = .true.
-! here we check whether argument arrays have the correct dimensions
-else if (size(x) /= d) then
-    flag = .true.
-else if (size(func_out) /= numfuncs) then
+! Check whether inputs have the correct sizes
+if (size(func_out) /= numfuncs) then
     flag = .true.
 else if ( (deriv_flag) .and. (size(deriv_out,1) /= numfuncs)) then
     flag = .true.
 else if ( (deriv_flag) .and. (size(deriv_out,2) /=d) ) then
     flag = .true.
-else
-    flag = .false.
 end if
 
 ! form the list of polynomial degrees in the tensor product of legendre polys
@@ -227,6 +225,49 @@ end if
 end subroutine leg_eval
 
 ! =================================================================================================
+!
+! This special subroutine is only used for computing bilinear quadrature that is exact on a space
+! of polynomials and minimal on polynomials of the next degree. It is designed to be called with
+! the NLopt optimization library.
+!
+subroutine leg_quad2(x,numpt,A_out)
+
+    implicit none
+    real(dp),   dimension(:),                   intent(in)  :: x        ! input array of points
+    integer,                                    intent(in)  :: numpt    ! number of points
+    real(dp),   dimension(:,:),                 intent(out) :: A_out    ! output matrix
+
+    real(dp),   dimension(1:numpt,1:numfuncs)               :: output
+    real(dp),   dimension(1:numpt,1:choose(maxdeg+1,2))     :: F
+    real(dp),   dimension(1:numpt,1:(maxdeg+1))             :: G
+    integer,    dimension(1:numpt)                          :: IPIV     ! LAPACK pivot info
+    integer                                                 :: INFO     ! LAPACK error value
+    logical                                                 :: flag
+
+    ! ---------
+
+    ! Check that a symmetric bilinear quadrature has been requested
+    if (numpt /= (numfuncs - maxdeg - 1)) then
+        print *, 'Error: Non-symmetric bilinear quadrature requested.'
+        stop
+    end if
+
+
+    ! Evaluate matrix functions
+    call leg_eval(reshape(x, (/ 2, numpt /) ), need_deriv = .false., output, 0.0d0, flag)
+    F = output(:,1:(numfuncs - maxdeg -1))
+    G = output(:,(numfuncs - maxdeg):numfuncs)
+
+    ! Compute objective function A(x) = inv(F(x)) * G(x) using LAPACK routines
+    call dgetrf(numpt,numpt,F,numpt,IPIV,INFO)
+    call dgetrs('N',numpt,maxdeg+1,F,numpt,IPIV,G,numpt,INFO)
+
+    A_out = G
+
+end subroutine leg_quad2
+
+! =================================================================================================
+
 
 
 end module legendre
