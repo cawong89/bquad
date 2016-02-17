@@ -53,6 +53,7 @@ implicit none
 private
 
 integer,    parameter                       :: dp = kind(1.0d0)
+real(dp),   parameter                       :: pi = 4*atan(1.0d0)
 integer                                     :: numrad, numfunc, maxdeg
 real(dp),   dimension(:), allocatable       :: K1, K2, K3
 save
@@ -445,6 +446,19 @@ do j = 1,numpt
     else
         Rad(j,:) = Radtemp(j,:)
     end if
+end do
+
+! ------ Normalize radial polynomials -------
+! mathematically normalization should be done at the Zernike step,
+! but it is cheaper to normalize at the radial step
+do n = 0, maxdeg
+    do m = n,0,-2
+        if (m > 0) then
+            Rad(:,idxwrap(m,n)) = sqrt((2*n+2)/pi) * Rad(:,idxwrap(m,n))
+        else
+            Rad(:,idxwrap(m,n)) = sqrt((n+1)/pi) * Rad(:,idxwrap(m,n))
+        end if
+    end do
 end do
 
 end subroutine Radial_eval
