@@ -105,8 +105,9 @@ end subroutine bquad_buildpars
 !       W           --- resulting bilinear quadrature weight matrix
 !       x           --- bilinear quadrature evaluation points, DIM(1:n)
 !       sigma_out   --- value of minimized objective function
+!		time 		--- optional, if present indicates that runtime should be output
 
-subroutine bquad_construct(n, A_in, x, W, sigma_out, alg)
+subroutine bquad_construct(n, A_in, x, W, sigma_out, alg, time)
 
     implicit none
 
@@ -116,14 +117,19 @@ subroutine bquad_construct(n, A_in, x, W, sigma_out, alg)
     real(dp),   dimension(:,:), intent(out)     :: W
     real(dp),                   intent(out)     :: sigma_out
     integer,    optional,       intent(in)      :: alg
+    real(dp),	optional,		intent(out)		:: time
 
     real(dp),   parameter                       :: tol_rel = 1.0d-6
     real(dp),   parameter                       :: tol_abs = 1.0d-6
     integer                                     :: ires, NL_alg
     integer*8                                   :: opt
+    
+    integer 									:: clock0, clock1, clockrate, ticks
 
-!     call sigmamax(sigma_out, n, x, x, 0, A_in)
-!     print *, 'Ini. sigma: ', sigma_out
+	! Initialize clock
+	if (present(time)) then
+    	call system_clock(clock0, count_rate = clockrate)
+	end if
 
     ! Set algorithm
     if ( present(alg) ) then
@@ -139,7 +145,7 @@ subroutine bquad_construct(n, A_in, x, W, sigma_out, alg)
     call nlo_set_min_objective(ires,opt,sigmamax,A_in) ! Sets objective function to sigmamax
     call nlo_set_ftol_rel(ires, opt, tol_rel)   ! Specifies relative tolerance
     call nlo_set_ftol_abs(ires, opt, tol_abs)   ! Specifies absolute tolerance
-!     call nlo_set_maxeval(ires,opt,0)
+    call nlo_set_maxeval(ires,opt,0)
 !     call nlo_set_maxtime(ires,opt,0.0d0)
 
     ! Invoke NLopt
@@ -150,6 +156,13 @@ subroutine bquad_construct(n, A_in, x, W, sigma_out, alg)
     W = 1 ! this is temporary for debugging purposes
 
     print *, 'Min. sigma: ', sigma_out
+    
+    ! Compute run time
+	if (present(time)) then
+    	call system_clock(clock1)
+    	time = real(clock1-clock0,dp) / real(clockrate,dp)
+    	print *, "Algorithm ", NL_alg, " runtime: ", time
+	end if
 
 
 end subroutine bquad_construct
