@@ -7,7 +7,7 @@
 ! =================================================================================================
 !
 ! Author: Christopher A. Wong
-! Date: 26 January 2016
+! Date: 18 February 2016
 ! Source format: Fortran 2008
 !
 ! This module contains procedures to evaluate the Zernike polynomials on the unit disk.
