@@ -8,8 +8,8 @@
 !
 !
 ! Author: Christopher A. Wong
-! Date: 4 February 2016
-! Source: Fortran 2003
+! Date: 7 March 2016
+! Source: Fortran 2008
 !
 ! Dependencies: LAPACK, NLopt
 !
@@ -23,6 +23,7 @@
 !
 ! Internal procedures:
 !   sigmamax
+!	ptperturb
 !
 
 ! =================================================================================================
@@ -94,45 +95,94 @@ end subroutine bquad_buildpars
 
 ! =================================================================================================
 
+subroutine bquad_construct(n, A_in, x, W, sigma_out, time)
+
+	implicit none
+	integer,					intent(in)		:: n
+	procedure(eval)								:: A_in
+	real(dp),	dimension(:),	intent(inout)	:: x
+	real(dp),	dimension(:,:),	intent(out)		:: W
+	real(dp),					intent(out)		:: sigma_out
+	real(dp),	optional,		intent(out)		:: time
+	
+	real(dp)									:: eps
+	integer										:: AlgIter, OptIter, MaxOptIter
+	integer,	dimension(1:4)					:: alg_list
+	logical										:: time_flag
+	
+	! 12 - Praxis, 25 - BOBYQA, 28 - Nelder Mead, 29 - SBPLX
+	alg_list = (/ 28, 29, 25, 12 /)
+	
+	! Set parameters
+	MaxOptIter = 10
+	eps = 5.0d-3
+	if (present(time)) then
+		time_flag = .TRUE.
+	else
+		time_flag = .FALSE.
+	end if
+	
+	! Iterate over different algorithms
+	do OptIter = 1,MaxOptIter	
+	
+		call ptperturb(x,eps)
+		
+		do AlgIter = 1,4
+			call optimize(n, x, A_in, time_flag, sigma_out, alg_list(AlgIter))
+		end do
+		
+	end do
+	
+	! Construct weight matrix
+	W = 1	! Temporary
+	
+	print *, 'Final min. sigma: ', sigma_out
+	
+
+end subroutine bquad_construct
+
+! =================================================================================================
+
 ! Calls an external optimization library to minimize the bilinear quadrature objective function
 !
 !   Inputs:
 !       n           --- number of variables; equals numpt * dm
 !       x           --- initial guess value, DIM(1:n)
 !       A_in        --- subroutine that computes A(x) = inv(F(x) * G(x))
+!		time 		--- logical, if TRUE indicates that runtime should be output
 !       alg         --- optional, integer identifier for NLopt optimization algorithm
 !   Outputs:
-!       W           --- resulting bilinear quadrature weight matrix
 !       x           --- bilinear quadrature evaluation points, DIM(1:n)
-!       sigma_out   --- value of minimized objective function
-!		time 		--- optional, if present indicates that runtime should be output
+!		sigma		--- Minimized singular value
 
-subroutine bquad_construct(n, A_in, x, W, sigma_out, alg, time)
+
+subroutine optimize(n, x, A_in, time_flag, sigma, alg)
 
     implicit none
 
     integer,                    intent(in)      :: n
     procedure(eval)                             :: A_in
     real(dp),   dimension(:),   intent(inout)   :: x
-    real(dp),   dimension(:,:), intent(out)     :: W
-    real(dp),                   intent(out)     :: sigma_out
     integer,    optional,       intent(in)      :: alg
-    real(dp),	optional,		intent(out)		:: time
+    logical,					intent(in)		:: time_flag
+	real(dp),					intent(out)		:: sigma
+    
 
     real(dp),   parameter                       :: tol_rel = 1.0d-6
     real(dp),   parameter                       :: tol_abs = 1.0d-6
     integer                                     :: ires, NL_alg
     integer*8                                   :: opt
     
+    real(dp)									:: time
     integer 									:: clock0, clock1, clockrate, ticks
 
 	! Initialize clock
-	if (present(time)) then
+	if (time_flag) then
     	call system_clock(clock0, count_rate = clockrate)
 	end if
 
     ! Set algorithm
-    if ( present(alg) ) then
+    if ( time_flag ) then
         NL_alg = alg
     else
         NL_alg = 12
@@ -149,23 +199,20 @@ subroutine bquad_construct(n, A_in, x, W, sigma_out, alg, time)
 !     call nlo_set_maxtime(ires,opt,0.0d0)
 
     ! Invoke NLopt
-    call nlo_optimize(ires, opt, x, sigma_out)
+    call nlo_optimize(ires, opt, x, sigma)
     call nlo_destroy(opt)
 
-    ! Construct weight matrix
-    W = 1 ! this is temporary for debugging purposes
-
-    print *, 'Min. sigma: ', sigma_out
+    print *, 'Min. sigma: ', sigma
     
     ! Compute run time
-	if (present(time)) then
+	if (time_flag) then
     	call system_clock(clock1)
     	time = real(clock1-clock0,dp) / real(clockrate,dp)
     	print *, "Algorithm ", NL_alg, " runtime: ", time
 	end if
 
 
-end subroutine bquad_construct
+end subroutine optimize
 
 ! =================================================================================================
 
@@ -198,5 +245,31 @@ subroutine sigmamax(output, n, x, grad, need_grad, A_in)
 end subroutine sigmamax
 
 ! =================================================================================================
+
+! Slightly perturbs an input point by a small random value. Used to force optimization procedure to
+! escape from local but nonglobal minima.
+
+subroutine ptperturb(x,eps)
+
+	implicit none
+	
+	real(dp),	dimension(:),	intent(inout)	:: x
+	real(dp),					intent(in)		:: eps
+	
+	integer										:: loop, seed
+	
+	call system_clock(count = seed)
+    call srand(seed)
+    
+    do loop = 1, size(x,1)
+    	x(loop) = x(loop) + eps * (2*rand() - 1)
+    end do
+	
+
+end subroutine ptperturb
+
+
+! =================================================================================================
+
 
 end module bquad

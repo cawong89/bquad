@@ -7,37 +7,38 @@ program diskquad
 
     integer,    parameter                       :: dp = kind(1.0d0)
     integer,    parameter                       :: pi = 4*atan(1.0d0)
-    integer										:: seed
+    integer										:: seed, numrand
     integer                                     :: maxdeg, numpt, numg, dm
     real(dp),   dimension(:),   allocatable     :: x0, y0
     real(dp),   dimension(:,:), allocatable     :: W
     real(dp)                                    :: sigma_out
 
-    real(dp),   dimension(:,:), allocatable     :: A_debug
     integer                                     :: k
     real(dp)                                    :: r, theta
     logical                                     :: input_flag
 
-    integer										:: j,jj
-    integer,	dimension(1:4)					:: alg_list
+    real(dp)									:: time
 
 !   include 'nlopt.f'
 
 ! ================================================================================================
 
-    input_flag = .false.
-    dm = 2
-    maxdeg = 3
-    numpt = maxdeg * (maxdeg + 1)/2
-    numg = maxdeg + 1
+    input_flag = .true.
+    dm = 2										! Dimension of space
+    maxdeg = 8									! Bquad evaluates IP for degrees up to maxdeg - 1
+    numrand = 1000								! Number of random initial pts to generate
+    numpt = maxdeg * (maxdeg + 1)/2				! Number of eval pts in quadrature
+    numg = maxdeg + 1							! Dimension of minimizing space
 
     allocate(x0(1:numpt *dm), W(1:numpt,1:numpt), y0(1:numpt *dm))
-    allocate(A_debug(1:numpt, 1:numg))
+   
+	! Build parameters
 
-    alg_list = (/ 28, 29, 25, 12 /)
+    call zern_buildpars(maxdeg)
+    call bquad_buildpars(numpt,dm,numg)
 
     ! Read input points
-    if (input_flag .eqv. .true.) then
+    if (input_flag) then
         open(unit = 1, file = "input.txt", action = "read", status = "old")
 
         do k = 1,numpt
@@ -58,21 +59,11 @@ program diskquad
 
     end if
 
-    ! Build parameters
-
-    call zern_buildpars(maxdeg)
-    call bquad_buildpars(numpt,dm,numg)
 
     ! Construct quadrature
 
-!     call zern_bquad(x0,numpt,A_debug)
-!     print *, A_debug
+	call bquad_construct(dm*numpt,zern_bquad,x0,W,sigma_out,time)
 
-	do j = 1,3
-		do jj = 1,4
-			call bquad_construct(dm*numpt,zern_bquad,x0,W,sigma_out, alg = alg_list(jj))
-		end do
-	end do
 
     ! Write output points
 
